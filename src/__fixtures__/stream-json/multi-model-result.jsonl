@@ -1,0 +1,1 @@
+{"type":"result","result":"Done.","is_error":false,"total_cost_usd":0.12,"duration_ms":45000,"duration_api_ms":30000,"num_turns":5,"modelUsage":{"claude-opus-4-6":{"inputTokens":2000,"outputTokens":800,"cacheReadInputTokens":500,"cacheCreationInputTokens":200},"claude-sonnet-4-6":{"inputTokens":3000,"outputTokens":1200,"cacheReadInputTokens":0,"cacheCreationInputTokens":0}}}

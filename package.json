@@ -1,0 +1,196 @@
+{
+  "name": "@lotiai/agent-kit",
+  "version": "0.0.1",
+  "description": "Reusable primitives for building agentic harnesses (Claude Code runners, git/github adapters, composer steps, multi-model review).",
+  "license": "MIT",
+  "keywords": [
+    "agentic",
+    "ai-agents",
+    "claude",
+    "claude-code",
+    "code-review",
+    "git",
+    "github",
+    "llm",
+    "typescript"
+  ],
+  "homepage": "https://github.com/lotillc/agent-kit#readme",
+  "bugs": {
+    "url": "https://github.com/lotillc/agent-kit/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lotillc/agent-kit.git"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ports": {
+      "types": "./dist/ports/index.d.ts",
+      "default": "./dist/ports/index.js"
+    },
+    "./artifacts": {
+      "types": "./dist/domain/artifacts/index.d.ts",
+      "default": "./dist/domain/artifacts/index.js"
+    },
+    "./process": {
+      "types": "./dist/adapters/process/index.d.ts",
+      "default": "./dist/adapters/process/index.js"
+    },
+    "./artifact-store": {
+      "types": "./dist/adapters/artifact-store/index.d.ts",
+      "default": "./dist/adapters/artifact-store/index.js"
+    },
+    "./agent-cli/claude": {
+      "types": "./dist/adapters/agent-cli/claude/index.d.ts",
+      "default": "./dist/adapters/agent-cli/claude/index.js"
+    },
+    "./agent-cli/shared": {
+      "types": "./dist/adapters/agent-cli/shared/index.d.ts",
+      "default": "./dist/adapters/agent-cli/shared/index.js"
+    },
+    "./pipeline": {
+      "types": "./dist/domain/pipeline/index.d.ts",
+      "default": "./dist/domain/pipeline/index.js"
+    },
+    "./steps": {
+      "types": "./dist/steps/index.d.ts",
+      "default": "./dist/steps/index.js"
+    },
+    "./aspects": {
+      "types": "./dist/aspects/index.d.ts",
+      "default": "./dist/aspects/index.js"
+    },
+    "./git": {
+      "types": "./dist/adapters/git/index.d.ts",
+      "default": "./dist/adapters/git/index.js"
+    },
+    "./diff": {
+      "types": "./dist/domain/diff/index.d.ts",
+      "default": "./dist/domain/diff/index.js"
+    },
+    "./pr": {
+      "types": "./dist/domain/pr/index.d.ts",
+      "default": "./dist/domain/pr/index.js"
+    },
+    "./gh-cli": {
+      "types": "./dist/adapters/gh-cli/index.d.ts",
+      "default": "./dist/adapters/gh-cli/index.js"
+    },
+    "./github": {
+      "types": "./dist/adapters/github/index.d.ts",
+      "default": "./dist/adapters/github/index.js"
+    },
+    "./models": {
+      "types": "./dist/models/index.d.ts",
+      "default": "./dist/models/index.js"
+    },
+    "./review": {
+      "types": "./dist/domain/review/index.d.ts",
+      "default": "./dist/domain/review/index.js"
+    },
+    "./agent-cli/codex": {
+      "types": "./dist/adapters/agent-cli/codex/index.d.ts",
+      "default": "./dist/adapters/agent-cli/codex/index.js"
+    },
+    "./agent-cli/gemini": {
+      "types": "./dist/adapters/agent-cli/gemini/index.d.ts",
+      "default": "./dist/adapters/agent-cli/gemini/index.js"
+    },
+    "./flows": {
+      "types": "./dist/flows/index.d.ts",
+      "default": "./dist/flows/index.js"
+    },
+    "./notifications": {
+      "types": "./dist/adapters/notifications/index.d.ts",
+      "default": "./dist/adapters/notifications/index.js"
+    },
+    "./concurrency": {
+      "types": "./dist/adapters/concurrency/index.d.ts",
+      "default": "./dist/adapters/concurrency/index.js"
+    },
+    "./prompts": {
+      "types": "./dist/domain/prompts/index.d.ts",
+      "default": "./dist/domain/prompts/index.js"
+    },
+    "./runners": {
+      "types": "./dist/runners/index.d.ts",
+      "default": "./dist/runners/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.vitest.*",
+    "!dist/**/__tests__",
+    "!dist/**/__fixtures__",
+    "!dist/**/*.map"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "compile": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "prepack": "pnpm clean && pnpm compile",
+    "test": "vitest run --config vitest.config.mts --typecheck",
+    "test:watch": "vitest --config vitest.config.mts",
+    "test:coverage": "vitest run --config vitest.config.mts --coverage",
+    "pricing:sync": "tsx scripts/pricing-sync.ts",
+    "pricing:check": "tsx scripts/pricing-sync.ts --check"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.91",
+    "@opentelemetry/api": "^1.9.0",
+    "cockatiel": "^3.2.1",
+    "zod": "^4.1.13"
+  },
+  "peerDependencies": {
+    "@ai-sdk/anthropic": "^3.0.63",
+    "@ai-sdk/openai": "^3.0.47",
+    "@lotiai/composer": "^0.2.3",
+    "ai": "^6.0.134"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/anthropic": {
+      "optional": true
+    },
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@lotiai/composer": {
+      "optional": true
+    },
+    "ai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.63",
+    "@ai-sdk/openai": "^3.0.47",
+    "@lotiai/composer": "^0.2.3",
+    "@types/node": "^22.19.18",
+    "@types/yargs": "^17.0.24",
+    "@vitest/coverage-v8": "^4.1.4",
+    "ai": "^6.0.134",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.4",
+    "yargs": "^17.7.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@anthropic-ai/claude-code",
+      "esbuild"
+    ]
+  }
+}
