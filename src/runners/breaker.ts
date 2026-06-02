@@ -253,9 +253,9 @@ export const withBreaker = ({
 
   return {
     name: runner.name,
-    runReview: (prompt, workingDir, signal) =>
-      guard((s) => runner.runReview(prompt, workingDir, s), signal),
-    runGenerate: (prompt, workingDir, signal) =>
-      guard((s) => runner.runGenerate(prompt, workingDir, s), signal),
+    runReview: (prompt, workingDir, signal, context) =>
+      guard((s) => runner.runReview(prompt, workingDir, s, context), signal),
+    runGenerate: (prompt, workingDir, signal, context) =>
+      guard((s) => runner.runGenerate(prompt, workingDir, s, context), signal),
   };
 };

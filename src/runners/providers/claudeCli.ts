@@ -1,6 +1,6 @@
 import { ClaudeRunner } from "../../adapters/agent-cli/claude/ClaudeRunner.js";
 import type { Logger } from "../../ports/Logger.js";
-import type { ModelRunner, ModelRunResult } from "../../ports/ModelRunner.js";
+import type { ModelRunner, ModelRunResult, RunCostContext } from "../../ports/ModelRunner.js";
 import { safeCallCostListener } from "../costListener.js";
 import type { CostListener, RunnerSpec } from "../RunnerSpec.js";
 import { revealSecret } from "../secret.js";
@@ -21,7 +21,12 @@ export const createClaudeCliRunner = (
   });
   if (!onCost && !logger) return inner;
 
-  const emit = (kind: "review" | "generate", startedAt: number, result: ModelRunResult): void => {
+  const emit = (
+    kind: "review" | "generate",
+    startedAt: number,
+    result: ModelRunResult,
+    context?: RunCostContext,
+  ): void => {
     safeCallCostListener(
       onCost,
       {
@@ -38,6 +43,8 @@ export const createClaudeCliRunner = (
         durationMs: result.durationMs,
         at: startedAt,
         success: result.success,
+        correlationId: context?.correlationId,
+        tags: context?.tags,
       },
       logger,
     );
@@ -61,16 +68,16 @@ export const createClaudeCliRunner = (
   // aren't killed by the per-attempt default); ClaudeRunner kills the tree on it.
   return {
     name,
-    runReview: async (prompt, workingDir, signal) => {
+    runReview: async (prompt, workingDir, signal, context) => {
       const startedAt = Date.now();
       const result = await inner.runReview(prompt, workingDir, signal);
-      emit("review", startedAt, result);
+      emit("review", startedAt, result, context);
       return result;
     },
-    runGenerate: async (prompt, workingDir, signal) => {
+    runGenerate: async (prompt, workingDir, signal, context) => {
       const startedAt = Date.now();
       const result = await inner.runGenerate(prompt, workingDir, signal);
-      emit("generate", startedAt, result);
+      emit("generate", startedAt, result, context);
       return result;
     },
   };

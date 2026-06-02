@@ -48,9 +48,9 @@ export const withRetry = (runner: ModelRunner, options: WithRetryOptions = {}): 
 
   return {
     name: runner.name,
-    runReview: (prompt, workingDir, signal) =>
-      run(() => runner.runReview(prompt, workingDir, signal), signal),
-    runGenerate: (prompt, workingDir, signal) =>
-      run(() => runner.runGenerate(prompt, workingDir, signal), signal),
+    runReview: (prompt, workingDir, signal, context) =>
+      run(() => runner.runReview(prompt, workingDir, signal, context), signal),
+    runGenerate: (prompt, workingDir, signal, context) =>
+      run(() => runner.runGenerate(prompt, workingDir, signal, context), signal),
   };
 };

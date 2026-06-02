@@ -71,10 +71,10 @@ const createBaseRunner = (
   };
   return {
     name,
-    runReview: async (prompt, workingDir, signal) =>
-      (await resolve()).runReview(prompt, workingDir, signal),
-    runGenerate: async (prompt, workingDir, signal) =>
-      (await resolve()).runGenerate(prompt, workingDir, signal),
+    runReview: async (prompt, workingDir, signal, context) =>
+      (await resolve()).runReview(prompt, workingDir, signal, context),
+    runGenerate: async (prompt, workingDir, signal, context) =>
+      (await resolve()).runGenerate(prompt, workingDir, signal, context),
   };
 };
 

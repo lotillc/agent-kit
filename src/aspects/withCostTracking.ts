@@ -31,19 +31,21 @@ export const withCostTracking = (
   { budget, onCostRecorded, onBudgetExceeded }: WithCostTrackingOptions,
 ): ModelRunner => ({
   name: runner.name,
-  runReview: async (prompt, workingDir, signal) => {
+  runReview: async (prompt, workingDir, signal, context) => {
+    // Short-circuit skips the runner, so no `CostEvent` (and no `context`) is
+    // emitted for a budget-blocked call — by design: it never reaches an emit point.
     if (budget.isExceeded()) {
       return budgetExceededResult(budget);
     }
-    const result = await runner.runReview(prompt, workingDir, signal);
+    const result = await runner.runReview(prompt, workingDir, signal, context);
     recordIfPresent(result, budget, onCostRecorded, onBudgetExceeded);
     return result;
   },
-  runGenerate: async (prompt, workingDir, signal) => {
+  runGenerate: async (prompt, workingDir, signal, context) => {
     if (budget.isExceeded()) {
       return budgetExceededResult(budget);
     }
-    const result = await runner.runGenerate(prompt, workingDir, signal);
+    const result = await runner.runGenerate(prompt, workingDir, signal, context);
     recordIfPresent(result, budget, onCostRecorded, onBudgetExceeded);
     return result;
   },

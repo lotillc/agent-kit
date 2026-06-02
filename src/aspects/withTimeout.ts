@@ -44,8 +44,9 @@ export const withTimeout = (
 
   return {
     name: runner.name,
-    runReview: (prompt, workingDir, signal) => cap(runner.runReview(prompt, workingDir, signal)),
-    runGenerate: (prompt, workingDir, signal) =>
-      cap(runner.runGenerate(prompt, workingDir, signal)),
+    runReview: (prompt, workingDir, signal, context) =>
+      cap(runner.runReview(prompt, workingDir, signal, context)),
+    runGenerate: (prompt, workingDir, signal, context) =>
+      cap(runner.runGenerate(prompt, workingDir, signal, context)),
   };
 };
