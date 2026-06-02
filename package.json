@@ -191,6 +191,9 @@
     "onlyBuiltDependencies": [
       "@anthropic-ai/claude-code",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "protobufjs@<7.5.6": "^7.5.6"
+    }
   }
 }
