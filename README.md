@@ -32,6 +32,14 @@ import type { ReviewFinding } from "@lotiai/agent-kit/review";
 
 The top-level `import { ... } from "@lotiai/agent-kit"` re-exports the curated public surface.
 
+## Examples
+
+- [`examples/coverage-agent`](./examples/coverage-agent) — a complete harness
+  built on these primitives: selects the highest-value uncovered file, runs
+  Claude Code to draft unit tests, gates on coverage/mutation/flake checks,
+  runs Claude reviewers (incl. an adversarial pass), and opens a review-ready
+  PR. A workspace member, so it always builds against the local source.
+
 ## Module format
 
 ESM (`"type": "module"`, `tsconfig` `module: NodeNext`). Relative imports carry `.js` suffixes. Consumes `@lotiai/composer` (CommonJS) via its package name — Node resolves CJS-from-ESM natively.

@@ -1,0 +1,48 @@
+{
+  "name": "coverage-agent",
+  "version": "0.0.0",
+  "description": "Example agent-kit harness: generates unit tests for the highest-value uncovered files and opens review-ready PRs.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "scripts": {
+    "compile": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run --config vitest.config.mts --typecheck",
+    "test:watch": "vitest --config vitest.config.mts",
+    "test:coverage": "vitest run --config vitest.config.mts --coverage",
+    "select": "tsx src/index.ts select",
+    "open-pr": "tsx src/index.ts open-pr",
+    "validate-diff": "tsx src/index.ts validate-diff",
+    "invoke-claude": "tsx src/index.ts invoke-claude",
+    "validate": "tsx src/index.ts validate",
+    "doctor": "tsx src/index.ts doctor",
+    "stryker-baseline": "tsx src/index.ts stryker-baseline",
+    "review": "tsx src/index.ts review",
+    "summary": "tsx src/index.ts summary",
+    "pipeline": "tsx src/index.ts pipeline"
+  },
+  "dependencies": {
+    "@lotiai/agent-kit": "workspace:*",
+    "@lotiai/composer": "^0.2.5",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@typescript-eslint/parser": "8.59.0",
+    "@vitest/eslint-plugin": "1.6.16",
+    "consola": "^3.4.2",
+    "eslint": "^9.38.0",
+    "istanbul-lib-coverage": "^3.2.2",
+    "yargs": "^17.7.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/node": "^22.19.18",
+    "@types/yargs": "^17.0.24",
+    "@vitest/coverage-v8": "^4.1.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.4"
+  }
+}

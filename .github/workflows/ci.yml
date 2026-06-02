@@ -32,3 +32,10 @@ jobs:
       - run: pnpm compile
 
       - run: pnpm test
+
+      # Build + test the examples/ workspace members against the just-built
+      # agent-kit dist. Root compile above must run first (examples resolve
+      # @lotiai/agent-kit via its exports map -> dist).
+      - run: pnpm --filter coverage-agent run compile
+
+      - run: pnpm --filter coverage-agent run test

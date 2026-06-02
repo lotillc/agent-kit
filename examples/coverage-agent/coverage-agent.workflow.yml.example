@@ -1,0 +1,96 @@
+# REFERENCE ONLY — this file is intentionally NOT under .github/workflows/, so
+# it never runs in this repo. Copy it into the .github/workflows/ directory of
+# the repository you want the agent to improve, then fill in the placeholders
+# (<...>) and adjust the `--filter` target to wherever you vendor this example.
+#
+# Automated unit-test coverage agent. Deterministic TypeScript selection logic
+# picks the highest-value uncovered file, invokes Claude Code headless to draft
+# a unit test, runs coverage + mutation + flake gates, and opens a review-ready
+# PR. Nothing merges automatically. All orchestration lives in the `pipeline`
+# command; this YAML is a thin shell.
+name: Coverage Agent
+
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Skip Claude invocation + PR open; select only"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: coverage-agent
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    name: Run coverage agent pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'main' || github.ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: "package.json"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Default GITHUB_TOKEN-opened PRs do not trigger downstream pull_request
+      # workflows (GitHub's recursion guard). Mint an installation token from a
+      # dedicated GitHub App so the App authors the PR and CI runs normally.
+      - name: Generate GitHub App Token
+        id: app-token
+        if: ${{ !inputs.dry_run }}
+        uses: actions/create-github-app-token@v3
+        with:
+          # Client ID is public (not a secret); only the private key is secret.
+          client-id: <YOUR_GITHUB_APP_CLIENT_ID>
+          private-key: ${{ secrets.COVERAGE_AGENT_PRIVATE_KEY }}
+
+      - name: Configure git identity
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+      - name: Run agent pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.COVERAGE_AGENT_ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          COVERAGE_AGENT_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: pnpm --filter coverage-agent run pipeline
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-agent-run
+          path: .coverage-agent-run/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: pnpm --filter coverage-agent run summary
