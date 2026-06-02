@@ -172,6 +172,34 @@ describe("withBreaker", () => {
     expect(result.costUsd).toBeCloseTo(1.1, 6); // 0.3 + 0.3 + 0.5, not just the final 0.5
   });
 
+  test("forwards RunCostContext to the inner runner on every attempt (incl. retries)", async () => {
+    const seen: Array<string | undefined> = [];
+    let n = 0;
+    const runner: ModelRunner = {
+      name: "ctx",
+      runGenerate: (_p, _w, _signal, context) => {
+        seen.push(context?.correlationId);
+        n += 1;
+        return Promise.resolve(
+          n < 3
+            ? { success: false, rawOutput: "", durationMs: 1, error: "upstream 503" }
+            : ok(),
+        );
+      },
+      runReview: () => Promise.resolve(ok()),
+    };
+    const guarded = withBreaker({
+      runner,
+      provider: "test-ctx-retry",
+      options: { maxRetries: 2, baseDelayMs: 0, breakerThreshold: 5, breakerDurationMs: 60_000 },
+    });
+    const result = await guarded.runGenerate("p", "/w", undefined, { correlationId: "incident-99" });
+    expect(result.success).toBe(true);
+    // Each retried attempt saw the same correlation — so a per-attempt CostEvent
+    // can be attributed, not just the final attempt's.
+    expect(seen).toEqual(["incident-99", "incident-99", "incident-99"]);
+  });
+
   test("429 rate-limit RESULTS trip the breaker (transient, unlike other 4xx)", async () => {
     let calls = 0;
     const limited = makeRunner(async () => {

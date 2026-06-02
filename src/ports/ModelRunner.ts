@@ -26,8 +26,27 @@ export interface ModelRunResult {
   };
 }
 
+// Per-call correlation copied verbatim onto every `CostEvent` the call emits
+// (incl. breaker retries). Distinct from the ambient `RunContext`: metadata, not deps.
+export interface RunCostContext {
+  /** Stable id linking this call to a unit of work (e.g. an incident id). */
+  readonly correlationId?: string;
+  /** Arbitrary string tags copied onto the emitted `CostEvent`. */
+  readonly tags?: Readonly<Record<string, string>>;
+}
+
 export interface ModelRunner {
   readonly name: string;
-  runReview(prompt: string, workingDir: string, signal?: AbortSignal): Promise<ModelRunResult>;
-  runGenerate(prompt: string, workingDir: string, signal?: AbortSignal): Promise<ModelRunResult>;
+  runReview(
+    prompt: string,
+    workingDir: string,
+    signal?: AbortSignal,
+    context?: RunCostContext,
+  ): Promise<ModelRunResult>;
+  runGenerate(
+    prompt: string,
+    workingDir: string,
+    signal?: AbortSignal,
+    context?: RunCostContext,
+  ): Promise<ModelRunResult>;
 }

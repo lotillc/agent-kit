@@ -1,4 +1,4 @@
-import type { ModelRunner, ModelRunResult } from "../../ports/ModelRunner.js";
+import type { ModelRunner, ModelRunResult, RunCostContext } from "../../ports/ModelRunner.js";
 import { compareSeverity, normalizeSeverity, type Severity } from "./severity.js";
 
 /**
@@ -59,6 +59,8 @@ export interface MultiModelReviewInput {
   runId: string;
   /** Per-runner timeout in ms. Default 2 minutes. */
   timeoutMs?: number;
+  /** Correlation stamped onto every runner's `CostEvent` (e.g. `{ correlationId: runId }`). */
+  costContext?: RunCostContext;
 }
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 2 * 60 * 1000;
@@ -69,6 +71,7 @@ export const multiModelReview = async ({
   workingDir,
   runId,
   timeoutMs = DEFAULT_REVIEW_TIMEOUT_MS,
+  costContext,
 }: MultiModelReviewInput): Promise<ReviewArtifact> => {
   if (runners.length === 0) {
     return emptyArtifact(runId);
@@ -83,7 +86,7 @@ export const multiModelReview = async ({
       const controller = new AbortController();
       try {
         const result = await withTimeout(
-          (signal) => runner.runReview(prompt, workingDir, signal),
+          (signal) => runner.runReview(prompt, workingDir, signal, costContext),
           timeoutMs,
           controller,
         );

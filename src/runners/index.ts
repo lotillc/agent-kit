@@ -7,6 +7,7 @@ export {
   type CreateRunnerRegistryOptions,
   createRunnerRegistry,
 } from "./createRunnerRegistry.js";
+export type { RunCostContext } from "../ports/ModelRunner.js";
 export { priceUsage, type UsageCounts } from "./pricing.js";
 export type {
   CostEvent,

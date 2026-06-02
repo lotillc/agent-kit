@@ -1,4 +1,4 @@
-import type { ModelRunner } from "../ports/ModelRunner.js";
+import type { ModelRunner, RunCostContext } from "../ports/ModelRunner.js";
 import type { BreakerOptions } from "./breaker.js";
 import type { SecretLike } from "./secret.js";
 
@@ -28,7 +28,9 @@ export interface RunnerSpec {
   readonly breaker?: BreakerOptions;
 }
 
-export interface CostEvent {
+// `correlationId` / `tags` come from the call's `RunCostContext` (undefined when
+// the caller passed none), letting consumers attribute spend to a unit of work.
+export interface CostEvent extends RunCostContext {
   readonly runnerName: string;
   readonly provider: Provider;
   readonly model: string;

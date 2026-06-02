@@ -211,4 +211,57 @@ describe("createAiSdkRunner", () => {
       consoleWarn.mockRestore();
     }
   });
+
+  test("stamps RunCostContext (correlationId + tags) onto the success event", async () => {
+    const onCost = vi.fn<(event: CostEvent) => void>();
+    const runner = createAiSdkRunner({
+      name: "reader",
+      provider: "anthropic",
+      modelId: "claude-haiku-4-5",
+      model: mockModel({ text: "ok", inputTokens: 10, outputTokens: 5 }),
+      onCost,
+    });
+    await runner.runReview("p", "/tmp", undefined, {
+      correlationId: "incident-42",
+      tags: { incidentId: "incident-42", team: "crispr" },
+    });
+    const event = onCost.mock.calls[0]![0];
+    expect(event.correlationId).toBe("incident-42");
+    expect(event.tags).toEqual({ incidentId: "incident-42", team: "crispr" });
+  });
+
+  test("stamps RunCostContext onto the failure event too", async () => {
+    const onCost = vi.fn<(event: CostEvent) => void>();
+    const errorArgs: MockOpts = {
+      doGenerate: async () => {
+        throw new Error("boom");
+      },
+    };
+    const runner = createAiSdkRunner({
+      name: "t",
+      provider: "openai",
+      modelId: "gpt-4o",
+      model: new MockLanguageModelV3(errorArgs),
+      onCost,
+    });
+    await runner.runGenerate("p", "/tmp", undefined, { correlationId: "incident-7" });
+    const event = onCost.mock.calls[0]![0];
+    expect(event.success).toBe(false);
+    expect(event.correlationId).toBe("incident-7");
+  });
+
+  test("leaves correlation fields undefined when no context is passed", async () => {
+    const onCost = vi.fn<(event: CostEvent) => void>();
+    const runner = createAiSdkRunner({
+      name: "r",
+      provider: "openai",
+      modelId: "gpt-4o",
+      model: mockModel({ text: "ok", inputTokens: 1, outputTokens: 1 }),
+      onCost,
+    });
+    await runner.runReview("p", "/tmp");
+    const event = onCost.mock.calls[0]![0];
+    expect(event.correlationId).toBeUndefined();
+    expect(event.tags).toBeUndefined();
+  });
 });

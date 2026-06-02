@@ -2,7 +2,7 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { generateText, type LanguageModel } from "ai";
 
 import type { Logger } from "../../ports/Logger.js";
-import type { ModelRunner, ModelRunResult } from "../../ports/ModelRunner.js";
+import type { ModelRunner, ModelRunResult, RunCostContext } from "../../ports/ModelRunner.js";
 import { safeCallCostListener } from "../costListener.js";
 import { priceUsage, type UsageCounts } from "../pricing.js";
 import type { CostListener, Provider } from "../RunnerSpec.js";
@@ -27,6 +27,7 @@ export const createAiSdkRunner = (opts: AiSdkRunnerOptions): ModelRunner => {
     prompt: string,
     kind: "review" | "generate",
     externalSignal?: AbortSignal,
+    context?: RunCostContext,
   ): Promise<ModelRunResult> =>
     tracer.startActiveSpan(
       `runner.${opts.provider}.${kind}`,
@@ -92,6 +93,8 @@ export const createAiSdkRunner = (opts: AiSdkRunnerOptions): ModelRunner => {
               durationMs,
               at: startedAt,
               success: true,
+              correlationId: context?.correlationId,
+              tags: context?.tags,
             },
             opts.logger,
           );
@@ -129,6 +132,8 @@ export const createAiSdkRunner = (opts: AiSdkRunnerOptions): ModelRunner => {
               durationMs,
               at: startedAt,
               success: false,
+              correlationId: context?.correlationId,
+              tags: context?.tags,
             },
             opts.logger,
           );
@@ -156,8 +161,10 @@ export const createAiSdkRunner = (opts: AiSdkRunnerOptions): ModelRunner => {
 
   return {
     name: opts.name,
-    runReview: (prompt, _workingDir, signal) => runOnce(prompt, "review", signal),
-    runGenerate: (prompt, _workingDir, signal) => runOnce(prompt, "generate", signal),
+    runReview: (prompt, _workingDir, signal, context) =>
+      runOnce(prompt, "review", signal, context),
+    runGenerate: (prompt, _workingDir, signal, context) =>
+      runOnce(prompt, "generate", signal, context),
   };
 };
 

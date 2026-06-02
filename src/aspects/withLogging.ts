@@ -50,7 +50,9 @@ export const withLogging = (
 
   return {
     name: runner.name,
-    runReview: (p, w, signal) => logAround("review", () => runner.runReview(p, w, signal)),
-    runGenerate: (p, w, signal) => logAround("generate", () => runner.runGenerate(p, w, signal)),
+    runReview: (p, w, signal, context) =>
+      logAround("review", () => runner.runReview(p, w, signal, context)),
+    runGenerate: (p, w, signal, context) =>
+      logAround("generate", () => runner.runGenerate(p, w, signal, context)),
   };
 };

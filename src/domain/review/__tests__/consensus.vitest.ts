@@ -275,4 +275,24 @@ describe("multiModelReview", () => {
     });
     expect(art.modelOutputs.map((o) => o.model)).toEqual(["slow", "fast"]);
   });
+
+  test("passes costContext to every runner's runReview", async () => {
+    const seen: Array<string | undefined> = [];
+    const spy = (name: string): ModelRunner => ({
+      name,
+      runReview: async (_p, _w, _signal, context) => {
+        seen.push(context?.correlationId);
+        return { success: true, rawOutput: "[]", durationMs: 1 };
+      },
+      runGenerate: async () => ({ success: true, rawOutput: "[]", durationMs: 1 }),
+    });
+    await multiModelReview({
+      runners: [spy("a"), spy("b")],
+      prompt: "p",
+      workingDir: "/w",
+      runId: "r-ctx",
+      costContext: { correlationId: "incident-1" },
+    });
+    expect(seen).toEqual(["incident-1", "incident-1"]);
+  });
 });
