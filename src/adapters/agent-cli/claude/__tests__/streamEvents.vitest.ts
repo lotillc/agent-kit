@@ -28,6 +28,16 @@ describe("parseStreamEventLine", () => {
     expect(parseStreamEventLine("pnpm install completed")).toBeNull();
   });
 
+  // `subtype` is the only unambiguous turn-cap signal; `num_turns` at the cap isn't.
+  test("surfaces the result subtype on a max-turns stop", () => {
+    const events = readFixture("max-turns.jsonl").map(parseStreamEventLine);
+    const result = events.at(-1);
+    expect(result?.type).toBe("result");
+    expect(result?.subtype).toBe("error_max_turns");
+    expect(result?.is_error).toBe(true);
+    expect(result?.num_turns).toBe(60);
+  });
+
   test("returns null for JSON without `type` field", () => {
     expect(parseStreamEventLine('{"foo": "bar"}')).toBeNull();
   });

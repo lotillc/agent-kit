@@ -1,0 +1,5 @@
+{"type":"system","session_id":"sess_cap001"}
+{"type":"assistant","message":{"id":"msg_001","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"/tmp/big-component.tsx"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"file contents"}]}}
+{"type":"assistant","message":{"id":"msg_002","content":[{"type":"tool_use","id":"toolu_2","name":"Write","input":{"file_path":"/tmp/big-component.vitest.ts"}}]}}
+{"type":"result","subtype":"error_max_turns","is_error":true,"total_cost_usd":1.7615,"duration_ms":635837,"duration_api_ms":600000,"num_turns":60,"modelUsage":{"claude-sonnet-4-6":{"inputTokens":12458,"outputTokens":35857,"cacheReadInputTokens":2100000,"cacheCreationInputTokens":39000}}}
