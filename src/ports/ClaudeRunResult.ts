@@ -50,6 +50,16 @@ export interface ClaudeCodeResult {
   durationMs: number;
   errorMessage?: string;
   resultText?: string;
+  /**
+   * `subtype` from the CLI's final `result` event — why it stopped (see
+   * `StreamEvent.subtype`). Undefined when the CLI was killed before emitting the
+   * event, or outside stream-json mode.
+   */
+  resultSubtype?: string;
+  /** The runner's own `timeoutMs` elapsed and it SIGTERM'd the child. */
+  timedOut?: boolean;
+  /** The caller's `signal` aborted the run. */
+  aborted?: boolean;
   stats?: ClaudeRunStats;
 }
 

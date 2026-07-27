@@ -33,6 +33,12 @@ export interface StreamEvent {
   session_id?: string;
   message?: StreamAssistantMessage;
   result?: string;
+  /**
+   * On a `result` event: `"success"`, or one of `"error_max_turns"`,
+   * `"error_max_budget_usd"`, `"error_max_structured_output_retries"`,
+   * `"error_during_execution"`.
+   */
+  subtype?: string;
   is_error?: boolean;
   error?: string;
   total_cost_usd?: number;

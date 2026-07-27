@@ -251,6 +251,7 @@ export const runClaudeCode = (
     const stderrChunks: Buffer[] = [];
     let capturedResultText: string | undefined;
     let capturedErrorMessage: string | undefined;
+    let capturedResultSubtype: string | undefined;
     let capturedStats: ClaudeRunStats | undefined;
     let resultEventSeen = false;
     let eventCount = 0;
@@ -337,6 +338,7 @@ export const runClaudeCode = (
         resultEventSeen = true;
         if (event.result) capturedResultText = event.result;
         if (event.is_error && event.result) capturedErrorMessage = event.result;
+        if (event.subtype) capturedResultSubtype = event.subtype;
         capturedStats = extractStats(event, now() - startTime);
       } else if (event.type === "assistant" && event.error) {
         const text = event.message?.content?.[0]?.text;
@@ -453,6 +455,9 @@ export const runClaudeCode = (
         durationMs,
         errorMessage: capturedErrorMessage,
         resultText: capturedResultText,
+        resultSubtype: capturedResultSubtype,
+        timedOut,
+        aborted,
         stats: capturedStats ?? { durationMs },
       });
     });

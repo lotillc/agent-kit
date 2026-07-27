@@ -257,6 +257,29 @@ describe("runClaudeCode", () => {
     expect(result.stats?.inputTokens).toBe(1500);
   });
 
+  test("surfaces resultSubtype so a caller can tell a turn-cap stop from a fault", async () => {
+    const harness = makeFakeSpawn();
+    const promise = runClaudeCode("prompt", "/work", {
+      streamThinking: true,
+      auth: "oauth",
+      spawnChild: harness.spawn,
+      resolveBinary: stubBinary,
+      ensurePath: stubEnsurePath,
+      logger: noopLogger,
+      heartbeatIntervalMs: 0,
+    });
+    harness.emit({ stdout: readFixture("max-turns.jsonl") });
+    // The CLI exits non-zero on its own turn cap.
+    harness.close(1);
+    const result = await promise;
+
+    expect(result.success).toBe(false);
+    expect(result.resultSubtype).toBe("error_max_turns");
+    expect(result.timedOut).toBe(false);
+    expect(result.aborted).toBe(false);
+    expect(result.stats?.numTurns).toBe(60);
+  });
+
   test("stream-json verbose flag is added alongside stream-json output-format", async () => {
     const harness = makeFakeSpawn();
     const promise = runClaudeCode("p", "/work", {
