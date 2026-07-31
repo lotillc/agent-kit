@@ -1,6 +1,6 @@
 {
   "name": "@lotiai/agent-kit",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Reusable primitives for building agentic harnesses (Claude Code runners, git/github adapters, composer steps, multi-model review).",
   "license": "MIT",
   "keywords": [
