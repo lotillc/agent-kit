@@ -157,7 +157,7 @@
   "peerDependencies": {
     "@ai-sdk/anthropic": "^3.0.63",
     "@ai-sdk/openai": "^3.0.47",
-    "@lotiai/composer": "^0.2.3",
+    "@lotiai/composer": "^0.2.3 || ^0.3.0 || ^0.4.0",
     "ai": "^6.0.134"
   },
   "peerDependenciesMeta": {
@@ -177,7 +177,7 @@
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.63",
     "@ai-sdk/openai": "^3.0.47",
-    "@lotiai/composer": "^0.2.3",
+    "@lotiai/composer": "^0.4.0",
     "@types/node": "^22.19.18",
     "@types/yargs": "^17.0.24",
     "@vitest/coverage-v8": "^4.1.4",
