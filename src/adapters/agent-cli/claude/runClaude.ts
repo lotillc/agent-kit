@@ -87,6 +87,12 @@ export interface ClaudeCodeRunnerOptions {
   /** Auth mode. Default `"auto"`: api-key if `anthropicApiKey` or `ANTHROPIC_API_KEY` env is set, else OAuth. */
   auth?: AuthMode;
   /**
+   * Under `auth: "federation"`, the path the CLI reads its OIDC assertion from.
+   * Concurrent spawns must each get a distinct path: assertions are single-use
+   * by `jti`, so sharing one makes the second exchange fail as a replay.
+   */
+  identityTokenFile?: string;
+  /**
    * Interval between heartbeat log lines during long waits. Default 15s. Set
    * to `0` to disable.
    */
@@ -142,6 +148,7 @@ export const runClaudeCode = (
       : withRedactedLogger(baseLogger, [
           options.anthropicApiKey,
           process.env.ANTHROPIC_API_KEY,
+          process.env.ANTHROPIC_IDENTITY_TOKEN,
           process.env.GITHUB_TOKEN,
           process.env.GH_TOKEN,
         ]);
@@ -160,6 +167,9 @@ export const runClaudeCode = (
       cwd,
       anthropicApiKey: options.anthropicApiKey,
       envApiKey: process.env.ANTHROPIC_API_KEY,
+      identityTokenFile: options.identityTokenFile,
+      envIdentityTokenFile: process.env.ANTHROPIC_IDENTITY_TOKEN_FILE,
+      envIdentityToken: process.env.ANTHROPIC_IDENTITY_TOKEN,
     });
     binary = resolveBinaryImpl();
     env = applyEnvOverrides(
@@ -213,6 +223,17 @@ export const runClaudeCode = (
 
   const startTime = now();
 
+  if (auth.mode === "federation" && auth.identitySource === "inherited") {
+    // Safe for a lone spawn, a replay waiting to happen for concurrent ones.
+    // Deliberately names no specific variable: this fires for an inherited token file and
+    // for an inherited literal assertion, and naming the wrong one sends whoever is
+    // debugging a replay 401 looking for a variable that was never set.
+    logger.warn(
+      "[claude-code] federation is using an identity assertion inherited from the environment " +
+        "rather than one passed per spawn; concurrent spawns must each pass a distinct " +
+        "identityTokenFile or their assertions replay",
+    );
+  }
   logger.info(
     `[claude-code] spawning ${command} (prompt=${prompt.length} chars, maxTurns=${options.maxTurns ?? "∞"}, model=${options.model ?? "default"}, auth=${auth.mode})`,
   );

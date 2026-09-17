@@ -51,3 +51,4 @@ Format is intentionally short: every ADR should read in under 60 seconds.
 - [0043 — Timeout hierarchy](./0043-timeout-hierarchy.md)
 - [0044 — Error-surface shape (throw + Result)](./0044-error-surface-shape.md)
 - [0045 — Per-run correlation on CostEvent](./0045-cost-event-correlation.md)
+- [0046 — Federated auth mode for the Claude CLI](./0046-federated-auth-mode.md)

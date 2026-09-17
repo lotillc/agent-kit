@@ -17,7 +17,7 @@ Two layers over a port surface:
 - **`adapters/`** — I/O implementations of ports. Imports node APIs, the `git`/`gh` CLIs, octokit, etc.
 - **`steps/`** — composer-compatible step *bodies* (run-functions) that consumers wrap in `@lotiai/composer`'s `step()`.
 
-See [`docs/adr/`](./docs/adr/) for 44 architecture decision records covering every non-trivial choice.
+See [`docs/adr/`](./docs/adr/) for 46 architecture decision records covering every non-trivial choice.
 
 ## Subpath exports
 

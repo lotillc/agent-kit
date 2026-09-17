@@ -3,7 +3,13 @@ export type {
   ClaudeLogLevel,
   ClaudeRunStats,
 } from "../../../ports/ClaudeRunResult.js";
-export { type AuthMode, type AuthResolution, applyEnvOverrides, resolveAuth } from "./auth.js";
+export {
+  type AuthMode,
+  type AuthResolution,
+  applyEnvOverrides,
+  FederationConfigError,
+  resolveAuth,
+} from "./auth.js";
 export { ClaudeRunner, type ClaudeRunnerOptions } from "./ClaudeRunner.js";
 export { extractStats } from "./extractStats.js";
 export { type ResolvedBinary, resolveClaudeBinary } from "./resolveBinary.js";

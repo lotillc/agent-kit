@@ -23,6 +23,8 @@ export interface AgenticClaudeOptions {
   apiKey?: string;
   /** See ClaudeCodeRunnerOptions.auth. Default `"auto"`. */
   auth?: AuthMode;
+  /** See ClaudeCodeRunnerOptions.identityTokenFile. Distinct per concurrent spawn. */
+  identityTokenFile?: string;
   /** See ClaudeCodeRunnerOptions.dangerouslySkipPermissions. Default `false`. */
   dangerouslySkipPermissions?: boolean;
   /** See ClaudeCodeRunnerOptions.disableRedaction. Default `false`. */
@@ -43,6 +45,7 @@ export const runAgenticClaude = (
     timeoutMs: opts.timeoutMs,
     model: opts.model,
     auth: opts.auth,
+    identityTokenFile: opts.identityTokenFile,
     streamThinking: true,
     dangerouslySkipPermissions: opts.dangerouslySkipPermissions ?? false,
     disableRedaction: opts.disableRedaction,

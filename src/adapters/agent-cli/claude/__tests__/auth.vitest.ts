@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { applyEnvOverrides, resolveAuth } from "../auth.js";
+import { applyEnvOverrides, FederationConfigError, resolveAuth } from "../auth.js";
 
 describe("resolveAuth", () => {
   test("auto → bare when an API key is supplied", () => {
@@ -14,7 +14,11 @@ describe("resolveAuth", () => {
     const result = resolveAuth({ mode: "auto", cwd: "/work" });
     expect(result.mode).toBe("oauth");
     expect(result.extraArgs).toEqual([]);
-    expect(result.envOverrides).toEqual({ ANTHROPIC_API_KEY: null });
+    expect(result.envOverrides).toEqual({
+      ANTHROPIC_API_KEY: null,
+      ANTHROPIC_IDENTITY_TOKEN_FILE: null,
+      ANTHROPIC_IDENTITY_TOKEN: null,
+    });
   });
 
   test("explicit bare emits --bare --add-dir and sets API key env", () => {
@@ -42,7 +46,11 @@ describe("resolveAuth", () => {
   test("auto → oauth when the env key is an empty string", () => {
     const result = resolveAuth({ mode: "auto", cwd: "/work", envApiKey: "" });
     expect(result.mode).toBe("oauth");
-    expect(result.envOverrides).toEqual({ ANTHROPIC_API_KEY: null });
+    expect(result.envOverrides).toEqual({
+      ANTHROPIC_API_KEY: null,
+      ANTHROPIC_IDENTITY_TOKEN_FILE: null,
+      ANTHROPIC_IDENTITY_TOKEN: null,
+    });
   });
 
   test("an explicit arg overrides the env key", () => {
@@ -70,14 +78,22 @@ describe("resolveAuth", () => {
   test("explicit oauth unsets the key even when the env key is present", () => {
     const result = resolveAuth({ mode: "oauth", cwd: "/repo", envApiKey: "sk-env" });
     expect(result.mode).toBe("oauth");
-    expect(result.envOverrides).toEqual({ ANTHROPIC_API_KEY: null });
+    expect(result.envOverrides).toEqual({
+      ANTHROPIC_API_KEY: null,
+      ANTHROPIC_IDENTITY_TOKEN_FILE: null,
+      ANTHROPIC_IDENTITY_TOKEN: null,
+    });
   });
 
   test("explicit oauth actively unsets ANTHROPIC_API_KEY (precedence trap)", () => {
     const result = resolveAuth({ mode: "oauth", cwd: "/repo", anthropicApiKey: "sk-stale" });
     expect(result.mode).toBe("oauth");
     expect(result.extraArgs).toEqual([]);
-    expect(result.envOverrides).toEqual({ ANTHROPIC_API_KEY: null });
+    expect(result.envOverrides).toEqual({
+      ANTHROPIC_API_KEY: null,
+      ANTHROPIC_IDENTITY_TOKEN_FILE: null,
+      ANTHROPIC_IDENTITY_TOKEN: null,
+    });
   });
 
   test("auto → oauth when the explicit key is empty or whitespace-only", () => {
@@ -89,6 +105,227 @@ describe("resolveAuth", () => {
     const result = resolveAuth({ mode: "bare", cwd: "/repo", anthropicApiKey: "" });
     expect(result.mode).toBe("bare");
     expect(result.envOverrides).toEqual({ ANTHROPIC_API_KEY: null });
+  });
+});
+
+describe("resolveAuth federation", () => {
+  test("omits --bare, which cannot reach the federation env vars at all", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+    expect(result.mode).toBe("federation");
+    expect(result.extraArgs).not.toContain("--bare");
+  });
+
+  // cwd is already the spawn directory and only `--bare` disables CLAUDE.md discovery,
+  // so --add-dir would be a no-op -- same as `oauth`, which passes no args either.
+  test("passes no extra args, matching the other non-bare mode", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+    expect(result.extraArgs).toEqual([]);
+  });
+
+  // Both outrank federation in the CLI's credential chain; either inherited from the
+  // environment would silently win and federation would never run.
+  // Each of these satisfies the CLI on its own, so an inherited one would win and the
+  // requested federation identity would never be used.
+  test.each(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"])(
+    "unsets %s, which would otherwise outrank federation",
+    (name) => {
+      const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+      expect(result.envOverrides[name]).toBeNull();
+    },
+  );
+
+  // These route the CLI to Bedrock/Vertex/Foundry on their own credentials, so an
+  // inherited one would ignore the assertion entirely and nothing would fail.
+  test.each(["CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"])(
+    "unsets %s, which would route around the Anthropic API",
+    (name) => {
+      const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+      expect(result.envOverrides[name]).toBeNull();
+    },
+  );
+
+  test("unsets them even when a key was supplied explicitly", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/a",
+      anthropicApiKey: "sk-ant-x",
+    });
+    expect(result.envOverrides.ANTHROPIC_API_KEY).toBeNull();
+  });
+
+  test("points the CLI at the identity token file when one is given", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/token-2",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/token-2");
+  });
+
+  test("adopts an inherited identity token file when no explicit one is given", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      envIdentityTokenFile: "/run/inherited",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/inherited");
+  });
+
+  test("an explicit file wins over the inherited one", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/explicit",
+      envIdentityTokenFile: "/run/inherited",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/explicit");
+  });
+
+  // The literal-assertion form is a valid federation setup, so it must not be refused,
+  // and there is no file path to set.
+  test("accepts an inherited literal assertion with no file", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJ..." });
+    expect(result.mode).toBe("federation");
+    // Cleared, not absent: a stale file var beside the literal would give the CLI two sources.
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeNull();
+  });
+
+  // Without an assertion, and with --bare omitted, the CLI would fall through to a cached
+  // OAuth session and run as whoever that is. Refusing is the only safe outcome.
+  test("refuses federation with no assertion from any source", () => {
+    expect(() => resolveAuth({ mode: "federation", cwd: "/repo" })).toThrow(
+      /requires an identity token/,
+    );
+  });
+
+  test("refuses a blank identity token file", () => {
+    expect(() =>
+      resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "   " }),
+    ).toThrow(/requires an identity token/);
+  });
+
+  // Exhaustive, unlike an per-key check: it also pins what must NOT be there, so a
+  // spurious override or a clear of the literal-assertion var fails here.
+  test("writes exactly the expected federation overrides and nothing else", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+    expect(result.envOverrides).toEqual({
+      ANTHROPIC_API_KEY: null,
+      ANTHROPIC_AUTH_TOKEN: null,
+      CLAUDE_CODE_OAUTH_TOKEN: null,
+      CLAUDE_CODE_USE_BEDROCK: null,
+      CLAUDE_CODE_USE_VERTEX: null,
+      CLAUDE_CODE_USE_FOUNDRY: null,
+      ANTHROPIC_IDENTITY_TOKEN_FILE: "/run/a",
+      ANTHROPIC_IDENTITY_TOKEN: null,
+    });
+  });
+
+  test("passes the literal through when it is the resolved source", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJ..." });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN).toBe("eyJ...");
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeNull();
+  });
+
+  // A trailing newline from secret injection would otherwise reach the CLI verbatim and
+  // make the exchange fail on an invalid JWT, after validation had already passed.
+  test("trims the literal it passes through", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: " eyJx \n" });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN).toBe("eyJx");
+  });
+
+  // Handing the CLI both sources lets the job-level literal -- shared by every spawn --
+  // win over the per-spawn file, which is the replay this option exists to prevent.
+  test("clears an inherited literal when a per-spawn file is selected", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/a",
+      envIdentityToken: "eyJshared",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/a");
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN).toBeNull();
+  });
+
+  // A path from `$(mktemp)` carries a trailing newline; untrimmed it reaches the CLI verbatim.
+  test("trims an explicit identity token file", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "  /run/a \n",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/a");
+  });
+
+  // Blank is not configured. Accepting it would let the run fall through to a cached
+  // OAuth session with no credential at all -- what the throw exists to prevent.
+  test.each(["envIdentityTokenFile", "envIdentityToken"])("refuses a blank %s", (field) => {
+    expect(() =>
+      resolveAuth({ mode: "federation", cwd: "/repo", [field]: "   " }),
+    ).toThrow(/requires an identity token/);
+  });
+
+  // The explicit-key half is covered above; this pins the inherited half, so an ambient
+  // key cannot quietly downgrade an explicitly requested federation run to bare.
+  // The warning that concurrent spawns will collide keys off this, so a whitespace
+  // explicit path -- trimmed away, silently falling back to the shared one -- must report
+  // "inherited" rather than being mistaken for a caller-supplied path.
+  test.each([
+    ["/run/a", undefined, "explicit"],
+    [undefined, "/run/env", "inherited"],
+    ["   ", "/run/env", "inherited"],
+  ])("identitySource for explicit=%s inherited=%s is %s", (explicit, inherited, expected) => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: explicit,
+      envIdentityTokenFile: inherited,
+    });
+    expect(result.identitySource).toBe(expected);
+  });
+
+  // A literal assertion can only come from the environment, so it is process-global and
+  // carries the same replay exposure as an inherited file.
+  test("a literal-only assertion counts as inherited", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJx" });
+    expect(result.identitySource).toBe("inherited");
+  });
+
+  test("refusal is a named error, so consumers need not match on the message", () => {
+    expect(() => resolveAuth({ mode: "federation", cwd: "/repo" })).toThrow(FederationConfigError);
+  });
+
+  test("an inherited API key does not downgrade an explicit federation request", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/a",
+      envApiKey: "sk-env",
+    });
+    expect(result.mode).toBe("federation");
+    expect(result.envOverrides.ANTHROPIC_API_KEY).toBeNull();
+  });
+
+  test("auto never selects federation implicitly", () => {
+    expect(resolveAuth({ mode: "auto", cwd: "/repo" }).mode).toBe("oauth");
+    expect(resolveAuth({ mode: "auto", cwd: "/repo", envApiKey: "k" }).mode).toBe("bare");
+  });
+});
+
+describe("resolveAuth oauth clears inherited federation credentials", () => {
+  // A federated CI job exports these at job level. Without clearing them an explicit
+  // "use the cached session" would federate anyway, and the auth= log line would lie.
+  test.each(["ANTHROPIC_IDENTITY_TOKEN_FILE", "ANTHROPIC_IDENTITY_TOKEN"])(
+    "unsets %s so an explicit oauth request cannot federate",
+    (name) => {
+      expect(resolveAuth({ mode: "oauth", cwd: "/repo" }).envOverrides[name]).toBeNull();
+    },
+  );
+
+  test("auto resolving to oauth clears them too", () => {
+    const result = resolveAuth({ mode: "auto", cwd: "/repo" });
+    expect(result.mode).toBe("oauth");
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeNull();
   });
 });
 

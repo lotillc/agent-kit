@@ -14,6 +14,9 @@ const PATTERNS: readonly RegExp[] = [
   /\bAKIA[0-9A-Z]{16}\b/g, // AWS access key IDs
   /(?<=[Bb]earer )[A-Za-z0-9._~+/-]{12,}=*/g, // Bearer <token>
   /(?<=x-access-token:)\s*[^\s@/]+/gi, // x-access-token:<token> (optional space)
+  // Signed JWTs: OIDC assertions reach us from files as well as env, so the caller-supplied
+  // literals cannot cover them. Anchored on the base64 of `{"alg"`, so prose does not match.
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g,
 ];
 
 const MIN_LITERAL_LENGTH = 6;
