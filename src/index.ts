@@ -16,6 +16,7 @@ export {
   type AgenticClaudeOptions,
   type AuthMode,
   type AuthResolution,
+  FederationConfigError,
   applyEnvOverrides,
   type ClaudeCodeRunnerOptions,
   extractStats,

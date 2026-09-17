@@ -120,6 +120,11 @@ const stubEnsurePath = (p: string | undefined) => p ?? "";
 
 const noopLogger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
+function restore(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
 describe("runClaudeCode", () => {
   test("emits -p and omits --dangerously-skip-permissions by default", async () => {
     const harness = makeFakeSpawn();
@@ -339,6 +344,89 @@ describe("runClaudeCode", () => {
     expect(args).toContain("--add-dir");
     expect(args).toContain("/work");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-test");
+  });
+
+  test("federation passes no --bare, points at the given token file, and scrubs rivals", async () => {
+    const harness = makeFakeSpawn();
+    const prior = {
+      key: process.env.ANTHROPIC_API_KEY,
+      oauth: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+      bedrock: process.env.CLAUDE_CODE_USE_BEDROCK,
+    };
+    process.env.ANTHROPIC_API_KEY = "sk-stale";
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "oauth-stale";
+    process.env.CLAUDE_CODE_USE_BEDROCK = "1";
+    try {
+      const promise = runClaudeCode("p", "/work", {
+        auth: "federation",
+        identityTokenFile: "/run/tok-1",
+        spawnChild: harness.spawn,
+        resolveBinary: stubBinary,
+        ensurePath: stubEnsurePath,
+        logger: noopLogger,
+        heartbeatIntervalMs: 0,
+      });
+      harness.close(0);
+      await promise;
+      const { args, env } = harness.getArgsSeen();
+      expect(args).not.toContain("--bare");
+      expect(env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/tok-1");
+      expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+      expect(env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined();
+    } finally {
+      restore("ANTHROPIC_API_KEY", prior.key);
+      restore("CLAUDE_CODE_OAUTH_TOKEN", prior.oauth);
+      restore("CLAUDE_CODE_USE_BEDROCK", prior.bedrock);
+    }
+  });
+
+  // Without the env read in runClaudeCode, a job-level token file is invisible and every
+  // federation run throws instead of authenticating.
+  test("federation adopts the inherited token file when no explicit one is passed", async () => {
+    const harness = makeFakeSpawn();
+    const prior = process.env.ANTHROPIC_IDENTITY_TOKEN_FILE;
+    process.env.ANTHROPIC_IDENTITY_TOKEN_FILE = "/run/from-env";
+    try {
+      const promise = runClaudeCode("p", "/work", {
+        auth: "federation",
+        spawnChild: harness.spawn,
+        resolveBinary: stubBinary,
+        ensurePath: stubEnsurePath,
+        logger: noopLogger,
+        heartbeatIntervalMs: 0,
+      });
+      harness.close(0);
+      await promise;
+      expect(harness.getArgsSeen().env.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/from-env");
+    } finally {
+      restore("ANTHROPIC_IDENTITY_TOKEN_FILE", prior);
+    }
+  });
+
+  test("federation with no assertion anywhere fails the run instead of spawning", async () => {
+    const harness = makeFakeSpawn();
+    const prior = {
+      file: process.env.ANTHROPIC_IDENTITY_TOKEN_FILE,
+      token: process.env.ANTHROPIC_IDENTITY_TOKEN,
+    };
+    delete process.env.ANTHROPIC_IDENTITY_TOKEN_FILE;
+    delete process.env.ANTHROPIC_IDENTITY_TOKEN;
+    try {
+      const result = await runClaudeCode("p", "/work", {
+        auth: "federation",
+        spawnChild: harness.spawn,
+        resolveBinary: stubBinary,
+        ensurePath: stubEnsurePath,
+        logger: noopLogger,
+        heartbeatIntervalMs: 0,
+      });
+      expect(result.success).toBe(false);
+      expect(result.stderr).toMatch(/requires an identity token/);
+    } finally {
+      restore("ANTHROPIC_IDENTITY_TOKEN_FILE", prior.file);
+      restore("ANTHROPIC_IDENTITY_TOKEN", prior.token);
+    }
   });
 
   test("oauth auth unsets ANTHROPIC_API_KEY even if parent has one", async () => {

@@ -1,7 +1,7 @@
 /**
  * Authentication resolution for the Claude Code CLI.
  *
- * Claude Code has two authentication paths:
+ * Claude Code has three authentication paths:
  *
  *   - **API key (`--bare`)**: auth strictly via `ANTHROPIC_API_KEY`. Disables
  *     CLAUDE.md auto-discovery (so we re-enable via `--add-dir <cwd>`).
@@ -29,6 +29,18 @@
  * as a valid-but-bad key.
  */
 export type AuthMode = "bare" | "oauth" | "auto" | "federation";
+
+/**
+ * `auth: "federation"` was requested with no reachable OIDC assertion. Distinct from the
+ * `bare` branch, which defers to the CLI: without an assertion the CLI silently falls
+ * through to a cached session instead of failing, so this one has to refuse.
+ */
+export class FederationConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FederationConfigError";
+  }
+}
 
 export interface AuthResolution {
   mode: "bare" | "oauth" | "federation";
@@ -94,7 +106,7 @@ export const resolveAuth = ({
     // is. Refusing is the only outcome that cannot silently use the wrong identity.
     const tokenFile = trimKey(identityTokenFile) ?? trimKey(envIdentityTokenFile);
     if (tokenFile === undefined && trimKey(envIdentityToken) === undefined) {
-      throw new Error(
+      throw new FederationConfigError(
         'auth: "federation" requires an identity token: pass identityTokenFile, or set ' +
           "ANTHROPIC_IDENTITY_TOKEN_FILE or ANTHROPIC_IDENTITY_TOKEN in the environment.",
       );
@@ -132,12 +144,19 @@ export const resolveAuth = ({
     };
   }
 
-  // OAuth: actively unset the API key env var so Claude Code falls through to
-  // the cached OAuth session instead of using a stale key from the shell env.
+  // OAuth: actively unset every credential the child would otherwise inherit, so the
+  // cached session is what runs. The federation vars are included because they are exactly
+  // that class of credential -- a federated CI job exports them at job level, and without
+  // this an explicit `auth: "oauth"` would federate anyway and the `auth=oauth` log line
+  // would name an identity that never ran.
   return {
     mode: "oauth",
     extraArgs: [],
-    envOverrides: { ANTHROPIC_API_KEY: null },
+    envOverrides: {
+      ANTHROPIC_API_KEY: null,
+      ANTHROPIC_IDENTITY_TOKEN_FILE: null,
+      ANTHROPIC_IDENTITY_TOKEN: null,
+    },
   };
 };
 

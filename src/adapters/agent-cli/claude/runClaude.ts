@@ -148,6 +148,7 @@ export const runClaudeCode = (
       : withRedactedLogger(baseLogger, [
           options.anthropicApiKey,
           process.env.ANTHROPIC_API_KEY,
+          process.env.ANTHROPIC_IDENTITY_TOKEN,
           process.env.GITHUB_TOKEN,
           process.env.GH_TOKEN,
         ]);

@@ -36,3 +36,16 @@ describe("redactSecrets", () => {
     expect(redactSecrets(text)).toBe(text);
   });
 });
+
+describe("JWT assertions", () => {
+  // OIDC assertions reach the runner from a file as well as the environment, so the
+  // caller-supplied literal list cannot cover them.
+  test("redacts a signed JWT that was never passed as a literal secret", () => {
+    const jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJyZXBvOmFjbWUvYXBwIn0.c2lnbmF0dXJl";
+    expect(redactSecrets(`assertion=${jwt}`)).toBe("assertion=[REDACTED]");
+  });
+
+  test("leaves ordinary prose alone", () => {
+    expect(redactSecrets("the eye of the storm. a.b.c")).toBe("the eye of the storm. a.b.c");
+  });
+});
