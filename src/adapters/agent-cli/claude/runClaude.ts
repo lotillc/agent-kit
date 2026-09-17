@@ -87,6 +87,12 @@ export interface ClaudeCodeRunnerOptions {
   /** Auth mode. Default `"auto"`: api-key if `anthropicApiKey` or `ANTHROPIC_API_KEY` env is set, else OAuth. */
   auth?: AuthMode;
   /**
+   * Under `auth: "federation"`, the path the CLI reads its OIDC assertion from.
+   * Concurrent spawns must each get a distinct path: assertions are single-use
+   * by `jti`, so sharing one makes the second exchange fail as a replay.
+   */
+  identityTokenFile?: string;
+  /**
    * Interval between heartbeat log lines during long waits. Default 15s. Set
    * to `0` to disable.
    */
@@ -160,6 +166,7 @@ export const runClaudeCode = (
       cwd,
       anthropicApiKey: options.anthropicApiKey,
       envApiKey: process.env.ANTHROPIC_API_KEY,
+      identityTokenFile: options.identityTokenFile,
     });
     binary = resolveBinaryImpl();
     env = applyEnvOverrides(

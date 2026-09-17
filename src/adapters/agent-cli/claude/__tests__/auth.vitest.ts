@@ -92,6 +92,62 @@ describe("resolveAuth", () => {
   });
 });
 
+describe("resolveAuth federation", () => {
+  test("omits --bare, which cannot reach the federation env vars at all", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+    expect(result.mode).toBe("federation");
+    expect(result.extraArgs).not.toContain("--bare");
+  });
+
+  test("keeps --add-dir so the working tree stays explicitly allowed", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+    expect(result.extraArgs).toEqual(["--add-dir", "/repo"]);
+  });
+
+  // Both outrank federation in the CLI's credential chain; either inherited from the
+  // environment would silently win and federation would never run.
+  test("unsets both credentials that outrank federation", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+    expect(result.envOverrides.ANTHROPIC_API_KEY).toBeNull();
+    expect(result.envOverrides.ANTHROPIC_AUTH_TOKEN).toBeNull();
+  });
+
+  test("unsets them even when a key was supplied explicitly", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", anthropicApiKey: "sk-ant-x" });
+    expect(result.envOverrides.ANTHROPIC_API_KEY).toBeNull();
+  });
+
+  test("points the CLI at the identity token file when one is given", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/token-2",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/token-2");
+  });
+
+  // Leaving it absent lets the inherited value through, which is what a caller
+  // wants when the whole job shares one file; setting it to "" would not.
+  test("leaves the variable untouched when no file is given", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+    expect("ANTHROPIC_IDENTITY_TOKEN_FILE" in result.envOverrides).toBe(false);
+  });
+
+  // The whole point of the option: concurrent spawns must not share an assertion.
+  test("distinct paths produce distinct overrides", () => {
+    const a = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+    const b = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/b" });
+    expect(a.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).not.toBe(
+      b.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE,
+    );
+  });
+
+  test("auto never selects federation implicitly", () => {
+    expect(resolveAuth({ mode: "auto", cwd: "/repo" }).mode).toBe("oauth");
+    expect(resolveAuth({ mode: "auto", cwd: "/repo", envApiKey: "k" }).mode).toBe("bare");
+  });
+});
+
 describe("applyEnvOverrides", () => {
   test("sets string values and removes null values", () => {
     const base: NodeJS.ProcessEnv = { FOO: "original", BAR: "keep" };

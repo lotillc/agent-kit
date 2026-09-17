@@ -11,6 +11,12 @@
  *   - **OAuth (cached session)**: reads `~/.claude/.credentials.json`. Right
  *     choice for local dev on a developer's laptop.
  *
+ *   - **Federation**: the CLI exchanges an OIDC assertion for a short-lived
+ *     Anthropic token and refreshes it on its own. Mutually exclusive with
+ *     `--bare`, which reaches only `ANTHROPIC_API_KEY`. Each concurrent spawn
+ *     needs its OWN `identityTokenFile`: assertions are single-use by `jti`, so
+ *     two processes sharing one file collide on the second exchange.
+ *
  * Key precedence under `auto`: an explicit `anthropicApiKey` arg wins; otherwise
  * a non-empty `ANTHROPIC_API_KEY` in the environment selects `bare` (honoring
  * the conventional env var — ADR-0020); with neither, `auto` falls back to
@@ -22,10 +28,10 @@
  * child would otherwise inherit — setting `""` doesn't help; Claude reads that
  * as a valid-but-bad key.
  */
-export type AuthMode = "bare" | "oauth" | "auto";
+export type AuthMode = "bare" | "oauth" | "auto" | "federation";
 
 export interface AuthResolution {
-  mode: "bare" | "oauth";
+  mode: "bare" | "oauth" | "federation";
   /** Extra CLI args to insert before `-p` / output-format flags. */
   extraArgs: readonly string[];
   /** Env-var mutations to apply to the child's env. `null` = unset that var. */
@@ -39,6 +45,11 @@ export interface ResolveAuthInput {
   anthropicApiKey?: string;
   /** `ANTHROPIC_API_KEY` observed in the environment; passed in so this stays pure. */
   envApiKey?: string;
+  /**
+   * Path the CLI reads its OIDC assertion from, under `auth: "federation"`.
+   * Give each concurrent spawn a distinct path; a shared one replays its `jti`.
+   */
+  identityTokenFile?: string;
 }
 
 /** Trim a key and treat an empty / whitespace-only value as absent. */
@@ -53,6 +64,7 @@ export const resolveAuth = ({
   cwd,
   anthropicApiKey,
   envApiKey,
+  identityTokenFile,
 }: ResolveAuthInput): AuthResolution => {
   // Trim and treat empty / whitespace-only values as "no key": Claude reads a
   // blank `ANTHROPIC_API_KEY` as a valid-but-bad key, and a stray newline/space
@@ -62,8 +74,24 @@ export const resolveAuth = ({
   // Explicit arg wins; otherwise the conventional env var selects bare under
   // `auto` (ADR-0020).
   const key = explicitKey ?? envKey;
-  const effective: "bare" | "oauth" =
+  const effective: "bare" | "oauth" | "federation" =
     mode === "auto" ? (key !== undefined ? "bare" : "oauth") : mode;
+
+  if (effective === "federation") {
+    // Both of these outrank federation in the CLI's credential chain, so either one
+    // inherited from the environment would silently win and federation would never run.
+    // `--add-dir` because only `--bare` disables CLAUDE.md discovery; this keeps the
+    // working tree explicitly allowed either way.
+    return {
+      mode: "federation",
+      extraArgs: ["--add-dir", cwd],
+      envOverrides: {
+        ANTHROPIC_API_KEY: null,
+        ANTHROPIC_AUTH_TOKEN: null,
+        ...(identityTokenFile === undefined ? {} : { ANTHROPIC_IDENTITY_TOKEN_FILE: identityTokenFile }),
+      },
+    };
+  }
 
   if (effective === "bare") {
     // Set the (trimmed) key explicitly rather than inheriting the raw env var.
