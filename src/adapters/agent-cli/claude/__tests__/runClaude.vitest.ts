@@ -6,6 +6,7 @@ import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, test, vi } from "vitest";
+import type { RunClaudeLogger } from "../runClaude.js";
 import { runClaudeCode } from "../runClaude.js";
 import type { StreamEvent } from "../streamEvents.js";
 
@@ -118,17 +119,21 @@ const stubBinary = () => ({ command: "/fake/claude", prefixArgs: [] as readonly 
 
 const stubEnsurePath = (p: string | undefined) => p ?? "";
 
-const noopLogger = { info: () => undefined, warn: () => undefined, error: () => undefined };
+const noopLogger: RunClaudeLogger = {
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
 
 /** Captures warn lines so a diagnostic's wording can be asserted, not just its existence. */
-function capturingLogger(): { logger: typeof noopLogger; warnings: string[] } {
+function capturingLogger(): { logger: RunClaudeLogger; warnings: string[] } {
   const warnings: string[] = [];
   return {
     warnings,
     logger: {
       info: () => undefined,
-      warn: (m: string) => {
-        warnings.push(m);
+      warn: (message) => {
+        warnings.push(message);
       },
       error: () => undefined,
     },
