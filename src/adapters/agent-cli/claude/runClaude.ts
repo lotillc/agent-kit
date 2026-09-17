@@ -223,11 +223,15 @@ export const runClaudeCode = (
 
   const startTime = now();
 
-  if (auth.mode === "federation" && options.identityTokenFile === undefined) {
+  if (auth.mode === "federation" && auth.identitySource === "inherited") {
     // Safe for a lone spawn, a replay waiting to happen for concurrent ones.
+    // Deliberately names no specific variable: this fires for an inherited token file and
+    // for an inherited literal assertion, and naming the wrong one sends whoever is
+    // debugging a replay 401 looking for a variable that was never set.
     logger.warn(
-      "[claude-code] federation is using the inherited ANTHROPIC_IDENTITY_TOKEN_FILE; " +
-        "concurrent spawns must each pass a distinct identityTokenFile or their assertions replay",
+      "[claude-code] federation is using an identity assertion inherited from the environment " +
+        "rather than one passed per spawn; concurrent spawns must each pass a distinct " +
+        "identityTokenFile or their assertions replay",
     );
   }
   logger.info(

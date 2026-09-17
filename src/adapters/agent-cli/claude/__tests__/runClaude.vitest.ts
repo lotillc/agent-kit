@@ -120,6 +120,21 @@ const stubEnsurePath = (p: string | undefined) => p ?? "";
 
 const noopLogger = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
+/** Captures warn lines so a diagnostic's wording can be asserted, not just its existence. */
+function capturingLogger(): { logger: typeof noopLogger; warnings: string[] } {
+  const warnings: string[] = [];
+  return {
+    warnings,
+    logger: {
+      info: () => undefined,
+      warn: (m: string) => {
+        warnings.push(m);
+      },
+      error: () => undefined,
+    },
+  };
+}
+
 function restore(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
@@ -427,6 +442,57 @@ describe("runClaudeCode", () => {
       restore("ANTHROPIC_IDENTITY_TOKEN_FILE", prior.file);
       restore("ANTHROPIC_IDENTITY_TOKEN", prior.token);
     }
+  });
+
+  test("federation warns, without naming a variable, when the assertion is a literal from env", async () => {
+    const harness = makeFakeSpawn();
+    const captured = capturingLogger();
+    const prior = {
+      file: process.env.ANTHROPIC_IDENTITY_TOKEN_FILE,
+      token: process.env.ANTHROPIC_IDENTITY_TOKEN,
+    };
+    delete process.env.ANTHROPIC_IDENTITY_TOKEN_FILE;
+    process.env.ANTHROPIC_IDENTITY_TOKEN = "eyJliteral";
+    try {
+      const promise = runClaudeCode("p", "/work", {
+        auth: "federation",
+        spawnChild: harness.spawn,
+        resolveBinary: stubBinary,
+        ensurePath: stubEnsurePath,
+        logger: captured.logger,
+        heartbeatIntervalMs: 0,
+      });
+      harness.close(0);
+      await promise;
+      const warning = captured.warnings.find((m) => m.includes("inherited from the environment"));
+      expect(warning).toBeDefined();
+      // Naming the file var here would send someone debugging a replay after a variable
+      // that was never set; the literal is what is actually in play.
+      expect(warning).not.toContain("ANTHROPIC_IDENTITY_TOKEN_FILE");
+      expect(harness.getArgsSeen().env.ANTHROPIC_IDENTITY_TOKEN).toBe("eyJliteral");
+    } finally {
+      restore("ANTHROPIC_IDENTITY_TOKEN_FILE", prior.file);
+      restore("ANTHROPIC_IDENTITY_TOKEN", prior.token);
+    }
+  });
+
+  test("federation stays quiet when the caller passes its own token file", async () => {
+    const harness = makeFakeSpawn();
+    const captured = capturingLogger();
+    const promise = runClaudeCode("p", "/work", {
+      auth: "federation",
+      identityTokenFile: "/run/tok-9",
+      spawnChild: harness.spawn,
+      resolveBinary: stubBinary,
+      ensurePath: stubEnsurePath,
+      logger: captured.logger,
+      heartbeatIntervalMs: 0,
+    });
+    harness.close(0);
+    await promise;
+    expect(captured.warnings.filter((m) => m.includes("inherited from the environment"))).toEqual(
+      [],
+    );
   });
 
   test("oauth auth unsets ANTHROPIC_API_KEY even if parent has one", async () => {

@@ -48,6 +48,11 @@ export interface AuthResolution {
   extraArgs: readonly string[];
   /** Env-var mutations to apply to the child's env. `null` = unset that var. */
   envOverrides: Record<string, string | null>;
+  /**
+   * Federation only: whether the assertion came from the caller or from the ambient
+   * environment. An inherited one is process-global and therefore shared by every spawn.
+   */
+  identitySource?: "explicit" | "inherited";
 }
 
 export interface ResolveAuthInput {
@@ -101,16 +106,27 @@ export const resolveAuth = ({
     mode === "auto" ? (key !== undefined ? "bare" : "oauth") : mode;
 
   if (effective === "federation") {
+    const explicitFile = trimKey(identityTokenFile);
+    const inheritedFile = trimKey(envIdentityTokenFile);
+    const literal = trimKey(envIdentityToken);
+    const tokenFile = explicitFile ?? inheritedFile;
     // Without an assertion the CLI has nothing to exchange, and since federation omits
     // `--bare` it would fall through to a cached OAuth session and run as whoever that
     // is. Refusing is the only outcome that cannot silently use the wrong identity.
-    const tokenFile = trimKey(identityTokenFile) ?? trimKey(envIdentityTokenFile);
-    if (tokenFile === undefined && trimKey(envIdentityToken) === undefined) {
+    if (tokenFile === undefined && literal === undefined) {
       throw new FederationConfigError(
         'auth: "federation" requires an identity token: pass identityTokenFile, or set ' +
           "ANTHROPIC_IDENTITY_TOKEN_FILE or ANTHROPIC_IDENTITY_TOKEN in the environment.",
       );
     }
+    // Exactly one source reaches the child. Leaving an inherited literal in place beside a
+    // per-spawn file would hand the CLI two, and the job-level literal every spawn shares
+    // could win -- reintroducing the replay this option exists to prevent. The literal is
+    // passed trimmed for the same reason a key is: a trailing newline reaches the CLI verbatim.
+    const identityOverrides: Record<string, string | null> =
+      tokenFile === undefined
+        ? { ANTHROPIC_IDENTITY_TOKEN_FILE: null, ANTHROPIC_IDENTITY_TOKEN: literal ?? null }
+        : { ANTHROPIC_IDENTITY_TOKEN_FILE: tokenFile, ANTHROPIC_IDENTITY_TOKEN: null };
     // Every credential the CLI accepts ahead of federation is cleared, plus the
     // third-party provider switches -- those route to Bedrock/Vertex/Foundry on their own
     // credentials, so an inherited one would ignore the assertion with nothing failing.
@@ -119,6 +135,7 @@ export const resolveAuth = ({
     return {
       mode: "federation",
       extraArgs: [],
+      identitySource: explicitFile === undefined ? "inherited" : "explicit",
       envOverrides: {
         ANTHROPIC_API_KEY: null,
         ANTHROPIC_AUTH_TOKEN: null,
@@ -126,7 +143,7 @@ export const resolveAuth = ({
         CLAUDE_CODE_USE_BEDROCK: null,
         CLAUDE_CODE_USE_VERTEX: null,
         CLAUDE_CODE_USE_FOUNDRY: null,
-        ...(tokenFile === undefined ? {} : { ANTHROPIC_IDENTITY_TOKEN_FILE: tokenFile }),
+        ...identityOverrides,
       },
     };
   }

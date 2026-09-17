@@ -187,7 +187,8 @@ describe("resolveAuth federation", () => {
   test("accepts an inherited literal assertion with no file", () => {
     const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJ..." });
     expect(result.mode).toBe("federation");
-    expect("ANTHROPIC_IDENTITY_TOKEN_FILE" in result.envOverrides).toBe(false);
+    // Cleared, not absent: a stale file var beside the literal would give the CLI two sources.
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeNull();
   });
 
   // Without an assertion, and with --bare omitted, the CLI would fall through to a cached
@@ -216,13 +217,34 @@ describe("resolveAuth federation", () => {
       CLAUDE_CODE_USE_VERTEX: null,
       CLAUDE_CODE_USE_FOUNDRY: null,
       ANTHROPIC_IDENTITY_TOKEN_FILE: "/run/a",
+      ANTHROPIC_IDENTITY_TOKEN: null,
     });
   });
 
-  // Clearing it would break the literal form the resolver deliberately accepts.
-  test("never clears ANTHROPIC_IDENTITY_TOKEN, which is a valid assertion source", () => {
+  test("passes the literal through when it is the resolved source", () => {
     const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJ..." });
-    expect("ANTHROPIC_IDENTITY_TOKEN" in result.envOverrides).toBe(false);
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN).toBe("eyJ...");
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBeNull();
+  });
+
+  // A trailing newline from secret injection would otherwise reach the CLI verbatim and
+  // make the exchange fail on an invalid JWT, after validation had already passed.
+  test("trims the literal it passes through", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: " eyJx \n" });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN).toBe("eyJx");
+  });
+
+  // Handing the CLI both sources lets the job-level literal -- shared by every spawn --
+  // win over the per-spawn file, which is the replay this option exists to prevent.
+  test("clears an inherited literal when a per-spawn file is selected", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/a",
+      envIdentityToken: "eyJshared",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/a");
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN).toBeNull();
   });
 
   // A path from `$(mktemp)` carries a trailing newline; untrimmed it reaches the CLI verbatim.
@@ -245,6 +267,30 @@ describe("resolveAuth federation", () => {
 
   // The explicit-key half is covered above; this pins the inherited half, so an ambient
   // key cannot quietly downgrade an explicitly requested federation run to bare.
+  // The warning that concurrent spawns will collide keys off this, so a whitespace
+  // explicit path -- trimmed away, silently falling back to the shared one -- must report
+  // "inherited" rather than being mistaken for a caller-supplied path.
+  test.each([
+    ["/run/a", undefined, "explicit"],
+    [undefined, "/run/env", "inherited"],
+    ["   ", "/run/env", "inherited"],
+  ])("identitySource for explicit=%s inherited=%s is %s", (explicit, inherited, expected) => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: explicit,
+      envIdentityTokenFile: inherited,
+    });
+    expect(result.identitySource).toBe(expected);
+  });
+
+  // A literal assertion can only come from the environment, so it is process-global and
+  // carries the same replay exposure as an inherited file.
+  test("a literal-only assertion counts as inherited", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJx" });
+    expect(result.identitySource).toBe("inherited");
+  });
+
   test("refusal is a named error, so consumers need not match on the message", () => {
     expect(() => resolveAuth({ mode: "federation", cwd: "/repo" })).toThrow(FederationConfigError);
   });
