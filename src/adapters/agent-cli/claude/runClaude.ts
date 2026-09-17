@@ -167,6 +167,8 @@ export const runClaudeCode = (
       anthropicApiKey: options.anthropicApiKey,
       envApiKey: process.env.ANTHROPIC_API_KEY,
       identityTokenFile: options.identityTokenFile,
+      envIdentityTokenFile: process.env.ANTHROPIC_IDENTITY_TOKEN_FILE,
+      envIdentityToken: process.env.ANTHROPIC_IDENTITY_TOKEN,
     });
     binary = resolveBinaryImpl();
     env = applyEnvOverrides(

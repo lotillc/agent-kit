@@ -94,26 +94,35 @@ describe("resolveAuth", () => {
 
 describe("resolveAuth federation", () => {
   test("omits --bare, which cannot reach the federation env vars at all", () => {
-    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
     expect(result.mode).toBe("federation");
     expect(result.extraArgs).not.toContain("--bare");
   });
 
   test("keeps --add-dir so the working tree stays explicitly allowed", () => {
-    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
     expect(result.extraArgs).toEqual(["--add-dir", "/repo"]);
   });
 
   // Both outrank federation in the CLI's credential chain; either inherited from the
   // environment would silently win and federation would never run.
-  test("unsets both credentials that outrank federation", () => {
-    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
-    expect(result.envOverrides.ANTHROPIC_API_KEY).toBeNull();
-    expect(result.envOverrides.ANTHROPIC_AUTH_TOKEN).toBeNull();
-  });
+  // Each of these satisfies the CLI on its own, so an inherited one would win and the
+  // requested federation identity would never be used.
+  test.each(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"])(
+    "unsets %s, which would otherwise outrank federation",
+    (name) => {
+      const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+      expect(result.envOverrides[name]).toBeNull();
+    },
+  );
 
   test("unsets them even when a key was supplied explicitly", () => {
-    const result = resolveAuth({ mode: "federation", cwd: "/repo", anthropicApiKey: "sk-ant-x" });
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/a",
+      anthropicApiKey: "sk-ant-x",
+    });
     expect(result.envOverrides.ANTHROPIC_API_KEY).toBeNull();
   });
 
@@ -126,11 +135,45 @@ describe("resolveAuth federation", () => {
     expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/token-2");
   });
 
-  // Leaving it absent lets the inherited value through, which is what a caller
-  // wants when the whole job shares one file; setting it to "" would not.
-  test("leaves the variable untouched when no file is given", () => {
-    const result = resolveAuth({ mode: "federation", cwd: "/repo" });
+  test("adopts an inherited identity token file when no explicit one is given", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      envIdentityTokenFile: "/run/inherited",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/inherited");
+  });
+
+  test("an explicit file wins over the inherited one", () => {
+    const result = resolveAuth({
+      mode: "federation",
+      cwd: "/repo",
+      identityTokenFile: "/run/explicit",
+      envIdentityTokenFile: "/run/inherited",
+    });
+    expect(result.envOverrides.ANTHROPIC_IDENTITY_TOKEN_FILE).toBe("/run/explicit");
+  });
+
+  // The literal-assertion form is a valid federation setup, so it must not be refused,
+  // and there is no file path to set.
+  test("accepts an inherited literal assertion with no file", () => {
+    const result = resolveAuth({ mode: "federation", cwd: "/repo", envIdentityToken: "eyJ..." });
+    expect(result.mode).toBe("federation");
     expect("ANTHROPIC_IDENTITY_TOKEN_FILE" in result.envOverrides).toBe(false);
+  });
+
+  // Without an assertion, and with --bare omitted, the CLI would fall through to a cached
+  // OAuth session and run as whoever that is. Refusing is the only safe outcome.
+  test("refuses federation with no assertion from any source", () => {
+    expect(() => resolveAuth({ mode: "federation", cwd: "/repo" })).toThrow(
+      /requires an identity token/,
+    );
+  });
+
+  test("refuses a blank identity token file", () => {
+    expect(() =>
+      resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "   " }),
+    ).toThrow(/requires an identity token/);
   });
 
   // The whole point of the option: concurrent spawns must not share an assertion.

@@ -50,6 +50,10 @@ export interface ResolveAuthInput {
    * Give each concurrent spawn a distinct path; a shared one replays its `jti`.
    */
   identityTokenFile?: string;
+  /** `ANTHROPIC_IDENTITY_TOKEN_FILE` observed in the environment; passed in so this stays pure. */
+  envIdentityTokenFile?: string;
+  /** `ANTHROPIC_IDENTITY_TOKEN` observed in the environment; the literal-assertion alternative. */
+  envIdentityToken?: string;
 }
 
 /** Trim a key and treat an empty / whitespace-only value as absent. */
@@ -65,6 +69,8 @@ export const resolveAuth = ({
   anthropicApiKey,
   envApiKey,
   identityTokenFile,
+  envIdentityTokenFile,
+  envIdentityToken,
 }: ResolveAuthInput): AuthResolution => {
   // Trim and treat empty / whitespace-only values as "no key": Claude reads a
   // blank `ANTHROPIC_API_KEY` as a valid-but-bad key, and a stray newline/space
@@ -78,8 +84,18 @@ export const resolveAuth = ({
     mode === "auto" ? (key !== undefined ? "bare" : "oauth") : mode;
 
   if (effective === "federation") {
-    // Both of these outrank federation in the CLI's credential chain, so either one
-    // inherited from the environment would silently win and federation would never run.
+    // Without an assertion the CLI has nothing to exchange, and since federation omits
+    // `--bare` it would fall through to a cached OAuth session and run as whoever that
+    // is. Refusing is the only outcome that cannot silently use the wrong identity.
+    const tokenFile = trimKey(identityTokenFile) ?? trimKey(envIdentityTokenFile);
+    if (tokenFile === undefined && trimKey(envIdentityToken) === undefined) {
+      throw new Error(
+        'auth: "federation" requires an identity token: pass identityTokenFile, or set ' +
+          "ANTHROPIC_IDENTITY_TOKEN_FILE or ANTHROPIC_IDENTITY_TOKEN in the environment.",
+      );
+    }
+    // Every credential the CLI accepts ahead of federation is cleared: an inherited one
+    // would silently win and the requested identity would never be used.
     // `--add-dir` because only `--bare` disables CLAUDE.md discovery; this keeps the
     // working tree explicitly allowed either way.
     return {
@@ -88,7 +104,8 @@ export const resolveAuth = ({
       envOverrides: {
         ANTHROPIC_API_KEY: null,
         ANTHROPIC_AUTH_TOKEN: null,
-        ...(identityTokenFile === undefined ? {} : { ANTHROPIC_IDENTITY_TOKEN_FILE: identityTokenFile }),
+        CLAUDE_CODE_OAUTH_TOKEN: null,
+        ...(tokenFile === undefined ? {} : { ANTHROPIC_IDENTITY_TOKEN_FILE: tokenFile }),
       },
     };
   }
