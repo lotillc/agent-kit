@@ -99,9 +99,11 @@ describe("resolveAuth federation", () => {
     expect(result.extraArgs).not.toContain("--bare");
   });
 
-  test("keeps --add-dir so the working tree stays explicitly allowed", () => {
+  // cwd is already the spawn directory and only `--bare` disables CLAUDE.md discovery,
+  // so --add-dir would be a no-op -- same as `oauth`, which passes no args either.
+  test("passes no extra args, matching the other non-bare mode", () => {
     const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
-    expect(result.extraArgs).toEqual(["--add-dir", "/repo"]);
+    expect(result.extraArgs).toEqual([]);
   });
 
   // Both outrank federation in the CLI's credential chain; either inherited from the
@@ -110,6 +112,16 @@ describe("resolveAuth federation", () => {
   // requested federation identity would never be used.
   test.each(["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"])(
     "unsets %s, which would otherwise outrank federation",
+    (name) => {
+      const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
+      expect(result.envOverrides[name]).toBeNull();
+    },
+  );
+
+  // These route the CLI to Bedrock/Vertex/Foundry on their own credentials, so an
+  // inherited one would ignore the assertion entirely and nothing would fail.
+  test.each(["CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"])(
+    "unsets %s, which would route around the Anthropic API",
     (name) => {
       const result = resolveAuth({ mode: "federation", cwd: "/repo", identityTokenFile: "/run/a" });
       expect(result.envOverrides[name]).toBeNull();

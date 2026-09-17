@@ -47,7 +47,12 @@ export interface ResolveAuthInput {
   envApiKey?: string;
   /**
    * Path the CLI reads its OIDC assertion from, under `auth: "federation"`.
-   * Give each concurrent spawn a distinct path; a shared one replays its `jti`.
+   *
+   * Assertions are single-use by `jti`, so **concurrent spawns must each pass a distinct
+   * path**. Omitting this falls back to the inherited `ANTHROPIC_IDENTITY_TOKEN_FILE`,
+   * which is process-global: two concurrent spawns then present the same assertion and the
+   * second exchange is rejected as a replay. The fallback is safe only for one spawn at a
+   * time; `runClaudeCode` warns when it is used.
    */
   identityTokenFile?: string;
   /** `ANTHROPIC_IDENTITY_TOKEN_FILE` observed in the environment; passed in so this stays pure. */
@@ -94,17 +99,21 @@ export const resolveAuth = ({
           "ANTHROPIC_IDENTITY_TOKEN_FILE or ANTHROPIC_IDENTITY_TOKEN in the environment.",
       );
     }
-    // Every credential the CLI accepts ahead of federation is cleared: an inherited one
-    // would silently win and the requested identity would never be used.
-    // `--add-dir` because only `--bare` disables CLAUDE.md discovery; this keeps the
-    // working tree explicitly allowed either way.
+    // Every credential the CLI accepts ahead of federation is cleared, plus the
+    // third-party provider switches -- those route to Bedrock/Vertex/Foundry on their own
+    // credentials, so an inherited one would ignore the assertion with nothing failing.
+    // No `--add-dir`: only `--bare` disables CLAUDE.md discovery, and cwd is already the
+    // spawn directory, so it would be a no-op here exactly as it is under `oauth`.
     return {
       mode: "federation",
-      extraArgs: ["--add-dir", cwd],
+      extraArgs: [],
       envOverrides: {
         ANTHROPIC_API_KEY: null,
         ANTHROPIC_AUTH_TOKEN: null,
         CLAUDE_CODE_OAUTH_TOKEN: null,
+        CLAUDE_CODE_USE_BEDROCK: null,
+        CLAUDE_CODE_USE_VERTEX: null,
+        CLAUDE_CODE_USE_FOUNDRY: null,
         ...(tokenFile === undefined ? {} : { ANTHROPIC_IDENTITY_TOKEN_FILE: tokenFile }),
       },
     };

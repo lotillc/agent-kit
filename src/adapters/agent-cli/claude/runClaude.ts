@@ -222,6 +222,13 @@ export const runClaudeCode = (
 
   const startTime = now();
 
+  if (auth.mode === "federation" && options.identityTokenFile === undefined) {
+    // Safe for a lone spawn, a replay waiting to happen for concurrent ones.
+    logger.warn(
+      "[claude-code] federation is using the inherited ANTHROPIC_IDENTITY_TOKEN_FILE; " +
+        "concurrent spawns must each pass a distinct identityTokenFile or their assertions replay",
+    );
+  }
   logger.info(
     `[claude-code] spawning ${command} (prompt=${prompt.length} chars, maxTurns=${options.maxTurns ?? "∞"}, model=${options.model ?? "default"}, auth=${auth.mode})`,
   );
