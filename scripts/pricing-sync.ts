@@ -21,8 +21,16 @@ const LITELLM_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 
 // scripts/ -> package root -> src/runners/pricing.generated.ts.
-const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const GENERATED_FILE = path.join(PACKAGE_ROOT, "src", "runners", "pricing.generated.ts");
+const PACKAGE_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const GENERATED_FILE = path.join(
+  PACKAGE_ROOT,
+  "src",
+  "runners",
+  "pricing.generated.ts",
+);
 
 // Providers agent-kit prices. claude-cli reuses the anthropic table; ollama has none.
 const PROVIDERS = ["anthropic", "openai"] as const;
@@ -41,6 +49,13 @@ interface ModelPrice {
 type PriceTable = Record<string, ModelPrice>;
 type Tables = { anthropic: PriceTable; openai: PriceTable };
 
+// LiteLLM rates that disagree with the provider's published price; re-check on each sync.
+const CORRECTIONS: {
+  [P in keyof Tables]?: Record<string, Partial<ModelPrice>>;
+} = {
+  anthropic: { "claude-sonnet-5-5": { cacheReadPerMTok: 0.2 } },
+};
+
 interface LiteLlmEntry {
   litellm_provider?: string;
   mode?: string;
@@ -52,14 +67,16 @@ interface LiteLlmEntry {
 
 // Per-token -> per-MTok, rounded to drop float noise (e.g. 1.5e-6 * 1e6 = 1.5).
 const toPerMTok = (perToken: unknown): number | undefined => {
-  if (typeof perToken !== "number" || !Number.isFinite(perToken)) return undefined;
+  if (typeof perToken !== "number" || !Number.isFinite(perToken))
+    return undefined;
   return Number((perToken * 1_000_000).toFixed(6));
 };
 
 export const buildTables = (raw: Record<string, unknown>): Tables => {
   const tables: Tables = { anthropic: {}, openai: {} };
   for (const [model, value] of Object.entries(raw)) {
-    if (model === "sample_spec" || !value || typeof value !== "object") continue;
+    if (model === "sample_spec" || !value || typeof value !== "object")
+      continue;
     const entry = value as LiteLlmEntry;
     const provider = entry.litellm_provider;
     if (provider !== "anthropic" && provider !== "openai") continue;
@@ -73,14 +90,15 @@ export const buildTables = (raw: Record<string, unknown>): Tables => {
     const cacheWrite = toPerMTok(entry.cache_creation_input_token_cost);
     if (cacheRead !== undefined) price.cacheReadPerMTok = cacheRead;
     if (cacheWrite !== undefined) price.cacheWritePerMTok = cacheWrite;
-    tables[provider][model] = price;
+    tables[provider][model] = { ...price, ...CORRECTIONS[provider]?.[model] };
   }
   return tables;
 };
 
 const fetchRaw = async (): Promise<Record<string, unknown>> => {
   const res = await fetch(LITELLM_URL);
-  if (!res.ok) throw new Error(`GET ${LITELLM_URL} -> ${res.status} ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`GET ${LITELLM_URL} -> ${res.status} ${res.statusText}`);
   return (await res.json()) as Record<string, unknown>;
 };
 
@@ -89,8 +107,12 @@ const renderTable = (name: string, table: PriceTable): string => {
     .sort()
     .map((key) => {
       const p = table[key]!;
-      const parts = [`inputPerMTok: ${p.inputPerMTok}`, `outputPerMTok: ${p.outputPerMTok}`];
-      if (p.cacheReadPerMTok !== undefined) parts.push(`cacheReadPerMTok: ${p.cacheReadPerMTok}`);
+      const parts = [
+        `inputPerMTok: ${p.inputPerMTok}`,
+        `outputPerMTok: ${p.outputPerMTok}`,
+      ];
+      if (p.cacheReadPerMTok !== undefined)
+        parts.push(`cacheReadPerMTok: ${p.cacheReadPerMTok}`);
       if (p.cacheWritePerMTok !== undefined)
         parts.push(`cacheWritePerMTok: ${p.cacheWritePerMTok}`);
       return `  ${JSON.stringify(key)}: { ${parts.join(", ")} },`;
@@ -129,7 +151,9 @@ export const diffTables = (live: Tables, committed: Tables): string[] => {
       if (a && !b) lines.push(`+ ${provider}/${model} (new upstream)`);
       else if (!a && b) lines.push(`- ${provider}/${model} (removed upstream)`);
       else if (a && b && JSON.stringify(a) !== JSON.stringify(b)) {
-        lines.push(`~ ${provider}/${model}: ${JSON.stringify(b)} -> ${JSON.stringify(a)}`);
+        lines.push(
+          `~ ${provider}/${model}: ${JSON.stringify(b)} -> ${JSON.stringify(a)}`,
+        );
       }
     }
   }
@@ -139,13 +163,17 @@ export const diffTables = (live: Tables, committed: Tables): string[] => {
 const runSync = async (): Promise<void> => {
   const tables = buildTables(await fetchRaw());
   writeFileSync(GENERATED_FILE, renderFile(tables));
-  const n = Object.keys(tables.anthropic).length + Object.keys(tables.openai).length;
+  const n =
+    Object.keys(tables.anthropic).length + Object.keys(tables.openai).length;
   note(`Wrote ${path.relative(PACKAGE_ROOT, GENERATED_FILE)} (${n} models)`);
   note("Format the generated file before committing.");
 };
 
 const runCheck = async (): Promise<void> => {
-  const [live, committed] = await Promise.all([fetchRaw().then(buildTables), loadCommitted()]);
+  const [live, committed] = await Promise.all([
+    fetchRaw().then(buildTables),
+    loadCommitted(),
+  ]);
   const drift = diffTables(live, committed);
   if (drift.length === 0) {
     note("Pricing snapshot is in sync with LiteLLM.");
@@ -162,7 +190,8 @@ const runCli = (): void => {
     .option("check", {
       type: "boolean",
       default: false,
-      describe: "Fail if the committed table drifts from live LiteLLM data (no write)",
+      describe:
+        "Fail if the committed table drifts from live LiteLLM data (no write)",
     })
     .strict()
     .help()
