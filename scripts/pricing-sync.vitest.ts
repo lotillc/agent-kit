@@ -12,6 +12,14 @@ const raw = {
     cache_read_input_token_cost: 0.0000001,
     cache_creation_input_token_cost: 0.00000125,
   },
+  "claude-sonnet-5-5": {
+    litellm_provider: "anthropic",
+    mode: "chat",
+    input_cost_per_token: 0.000002,
+    output_cost_per_token: 0.00001,
+    cache_read_input_token_cost: 0.0000001,
+    cache_creation_input_token_cost: 0.0000025,
+  },
   "gpt-4o-mini": {
     litellm_provider: "openai",
     mode: "chat",
@@ -56,9 +64,21 @@ describe("buildTables", () => {
     });
   });
 
+  it("overrides a LiteLLM rate that disagrees with the published price", () => {
+    expect(buildTables(raw).anthropic["claude-sonnet-5-5"]).toEqual({
+      inputPerMTok: 2,
+      outputPerMTok: 10,
+      cacheReadPerMTok: 0.2,
+      cacheWritePerMTok: 2.5,
+    });
+  });
+
   it("includes responses-mode models but omits absent cache fields", () => {
     const tables = buildTables(raw);
-    expect(tables.openai["gpt-5.5-pro"]).toEqual({ inputPerMTok: 30, outputPerMTok: 180 });
+    expect(tables.openai["gpt-5.5-pro"]).toEqual({
+      inputPerMTok: 30,
+      outputPerMTok: 180,
+    });
   });
 
   it("skips non-text modes, other providers, prefixed keys, and missing costs", () => {
@@ -80,11 +100,16 @@ describe("diffTables", () => {
     const live = buildTables(raw);
     const committed = buildTables(raw);
     delete committed.openai["gpt-4o-mini"]; // live has it, committed doesn't -> added
-    committed.anthropic["claude-haiku-4-5"] = { inputPerMTok: 99, outputPerMTok: 99 }; // changed
+    committed.anthropic["claude-haiku-4-5"] = {
+      inputPerMTok: 99,
+      outputPerMTok: 99,
+    }; // changed
     committed.openai["ghost-model"] = { inputPerMTok: 1, outputPerMTok: 2 }; // removed upstream
     const drift = diffTables(live, committed);
     expect(drift.some((l) => l.startsWith("+ openai/gpt-4o-mini"))).toBe(true);
-    expect(drift.some((l) => l.startsWith("~ anthropic/claude-haiku-4-5"))).toBe(true);
+    expect(
+      drift.some((l) => l.startsWith("~ anthropic/claude-haiku-4-5")),
+    ).toBe(true);
     expect(drift.some((l) => l.startsWith("- openai/ghost-model"))).toBe(true);
   });
 });
